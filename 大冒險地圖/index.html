@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>墨書傳奇</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Serif TC', 'Songti SC', '宋體', serif;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #0a0c14;
+      color: #e8dfc8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ─── Cover Screen ────────────────────────────────── */
+    #cover-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 400;
+      cursor: pointer;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease;
+    }
+    #cover-screen.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #cover-screen.hidden {
+      display: none;
+    }
+    #cover-screen img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* ─── Info Bar (top-right, always visible) ────────── */
+    #info-bar {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(10, 12, 20, 0.88);
+      border: 1px solid rgba(200, 170, 80, 0.45);
+      border-radius: 10px;
+      padding: 9px 16px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #cert-count {
+      font-size: 0.88rem;
+      color: #8a7050;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+    }
+    #cert-count .count-num {
+      color: #d4af37;
+      font-weight: 700;
+    }
+    #btn-clear {
+      background: transparent;
+      border: 1px solid rgba(200, 170, 80, 0.35);
+      border-radius: 7px;
+      color: #8a7050;
+      font-size: 0.78rem;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-family: inherit;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    #btn-clear:hover {
+      border-color: rgba(200, 170, 80, 0.75);
+      color: #d4af37;
+      background: rgba(200, 170, 80, 0.08);
+    }
+
+    /* ─── Map Container ───────────────────────────────── */
+    /* Images are 1672×941 ≈ 16:9. Container matches exact ratio. */
+    #map-container {
+      position: relative;
+      /* fill viewport maintaining 1672:941 ratio */
+      width: min(100vw, calc(100vh * 1672 / 941));
+      height: min(100vh, calc(100vw * 941 / 1672));
+      flex-shrink: 0;
+    }
+    #map-img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: fill;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* ─── Hot Zones ───────────────────────────────────── */
+    .hot-zone {
+      position: absolute;
+      cursor: pointer;
+      border-radius: 10px;
+      transition: background 0.25s, box-shadow 0.25s;
+    }
+    .hot-zone:hover {
+      background: rgba(255, 245, 160, 0.07);
+      box-shadow: 0 0 28px 10px rgba(255, 245, 160, 0.10), inset 0 0 20px rgba(255, 245, 160, 0.04);
+    }
+    .hot-zone:active {
+      background: rgba(255, 245, 160, 0.13);
+    }
+
+    /* ─── Done Stamps ─────────────────────────────────── */
+    .done-stamp {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      width: clamp(28px, 3vw, 44px);
+      height: clamp(28px, 3vw, 44px);
+      background: rgba(30, 140, 70, 0.88);
+      border: 2px solid #5de08a;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(0.9rem, 1.5vw, 1.3rem);
+      color: #fff;
+      font-weight: 900;
+      pointer-events: none;
+      box-shadow: 0 0 16px rgba(40, 200, 80, 0.7), 0 2px 8px rgba(0,0,0,0.5);
+      text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+      opacity: 0;
+      transition: transform 0.4s cubic-bezier(.22,1,.36,1), opacity 0.4s;
+    }
+    .done-stamp.show {
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 1;
+    }
+
+    /* ─── Modal Overlay ───────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 200;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+
+    @keyframes modalPop {
+      from { transform: scale(.85); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    .modal-box {
+      background: linear-gradient(160deg, #12141e, #0d0f18);
+      border: 2px solid rgba(200,170,80,.4);
+      border-radius: 20px;
+      padding: 36px 32px 28px;
+      max-width: 560px;
+      width: 100%;
+      animation: modalPop .3s cubic-bezier(.22,1,.36,1);
+      position: relative;
+      box-shadow: 0 24px 80px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.05);
+    }
+    .modal-box::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212,175,55,.7), transparent);
+    }
+
+    .modal-title {
+      text-align: center;
+      font-size: 1.4rem;
+      font-weight: 900;
+      color: #d4af37;
+      letter-spacing: .2em;
+      margin-bottom: 6px;
+    }
+    .modal-hint {
+      text-align: center;
+      font-size: .8rem;
+      color: #6a5c40;
+      margin-bottom: 28px;
+      letter-spacing: .05em;
+    }
+
+    /* ─── Slots ───────────────────────────────────────── */
+    .slots-row {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .slot-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .slot-label {
+      font-size: .8rem;
+      color: #8a7050;
+      letter-spacing: .1em;
+    }
+    .slot-zone {
+      width: 90px;
+      height: 90px;
+      border: 2px dashed rgba(200,170,80,.35);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.2rem;
+      transition: border-color .2s, background .2s;
+      position: relative;
+      background: rgba(255,255,255,.02);
+    }
+    .slot-zone.drag-over {
+      border-color: rgba(200,170,80,.8);
+      background: rgba(200,170,80,.08);
+    }
+    .slot-zone.filled {
+      border-style: solid;
+      border-color: rgba(80,200,120,.6);
+      background: rgba(40,120,60,.15);
+    }
+    .slot-zone::before {
+      content: '?';
+      position: absolute;
+      font-size: 1.6rem;
+      color: rgba(200,170,80,.15);
+      font-family: serif;
+    }
+    .slot-zone.filled::before { display: none; }
+
+    @keyframes slotFill {
+      0%  { transform: scale(.5); opacity: 0; }
+      70% { transform: scale(1.15); }
+      100%{ transform: scale(1);   opacity: 1; }
+    }
+    .slot-badge {
+      animation: slotFill .3s cubic-bezier(.22,1,.36,1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      pointer-events: none;
+    }
+    .slot-badge-emoji { font-size: 2rem; }
+    .slot-badge-label { font-size: .55rem; color: #5de08a; letter-spacing: .05em; }
+
+    /* ─── Backpack ────────────────────────────────────── */
+    .backpack-label {
+      font-size: .85rem;
+      color: #8a7050;
+      letter-spacing: .1em;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-top: 1px solid rgba(200,170,80,.15);
+      padding-top: 20px;
+    }
+    #backpack {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+      min-height: 72px;
+      padding: 8px;
+      background: rgba(0,0,0,.2);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.04);
+      margin-bottom: 20px;
+    }
+    .badge-card {
+      width: 80px;
+      height: 80px;
+      border: 2px solid rgba(200,170,80,.4);
+      border-radius: 12px;
+      background: linear-gradient(160deg, #1e1a2e, #141020);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      transition: transform .15s, box-shadow .15s, border-color .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .badge-card:hover {
+      transform: translateY(-4px) scale(1.05);
+      border-color: rgba(200,170,80,.8);
+      box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    }
+    .badge-card:active { cursor: grabbing; }
+    .badge-card.dragging { opacity: .3; cursor: grabbing; }
+
+    @keyframes badgeFlashRed {
+      0%   { border-color: rgba(200,170,80,.4); }
+      40%  { border-color: #ff3333; box-shadow: 0 0 22px rgba(255,0,0,.8); background: rgba(100,0,0,.3); }
+      100% { border-color: rgba(200,170,80,.4); }
+    }
+    .badge-card.wrong { animation: badgeFlashRed .35s ease-out; }
+
+    .badge-emoji { font-size: 1.8rem; line-height: 1; }
+    .badge-label { font-size: .6rem; color: #a89060; letter-spacing: .05em; text-align: center; }
+
+    .backpack-empty {
+      width: 100%;
+      text-align: center;
+      color: #4a3c28;
+      font-size: .85rem;
+      padding: 16px 0;
+      letter-spacing: .05em;
+    }
+
+    .btn-close-modal {
+      display: block;
+      margin: 0 auto;
+      background: transparent;
+      border: 1px solid rgba(200,170,80,.3);
+      border-radius: 8px;
+      color: #6a5c40;
+      font-family: inherit;
+      font-size: .85rem;
+      padding: 8px 24px;
+      cursor: pointer;
+      letter-spacing: .08em;
+      transition: all .2s;
+    }
+    .btn-close-modal:hover {
+      border-color: rgba(200,170,80,.6);
+      color: #a89060;
+    }
+
+    /* ─── Win Screen ──────────────────────────────────── */
+    #win-screen {
+      display: none;
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, #0a1a2a 0%, #020408 100%);
+      z-index: 300;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+    }
+    #win-screen.show { display: flex; }
+
+    @keyframes winEntrance {
+      0%  { transform: scale(.6) translateY(30px); opacity: 0; }
+      70% { transform: scale(1.05) translateY(-4px); }
+      100%{ transform: scale(1) translateY(0); opacity: 1; }
+    }
+    @keyframes goldGlow {
+      0%,100% { filter: drop-shadow(0 0 20px rgba(212,175,55,.5)); }
+      50%      { filter: drop-shadow(0 0 50px rgba(212,175,55,.95)) drop-shadow(0 0 100px rgba(212,175,55,.3)); }
+    }
+    .win-inner { animation: winEntrance .6s cubic-bezier(.22,1,.36,1) forwards; }
+    .win-trophy {
+      font-size: 5rem;
+      display: block;
+      margin-bottom: 16px;
+      animation: goldGlow 2.5s ease-in-out infinite;
+    }
+    .win-title {
+      font-size: 2.4rem;
+      font-weight: 900;
+      letter-spacing: .3em;
+      background: linear-gradient(180deg, #ffe878, #d4af37);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 24px;
+    }
+    .win-stats {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(200,170,80,.25);
+      border-radius: 14px;
+      padding: 20px 36px;
+      margin-bottom: 28px;
+    }
+    .win-time-label {
+      font-size: .9rem;
+      color: #8a7050;
+      letter-spacing: .1em;
+      margin-bottom: 6px;
+    }
+    #win-time {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #ffe878;
+      letter-spacing: .08em;
+    }
+    .btn-restart {
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: .15em;
+      padding: 14px 40px;
+      border-radius: 10px;
+      border: 2px solid #d4af37;
+      background: linear-gradient(160deg, #2a1a00, #1a1000);
+      color: #d4af37;
+      cursor: pointer;
+      transition: all .2s;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    }
+    .btn-restart:hover {
+      background: linear-gradient(160deg, #3a2400, #2a1800);
+      box-shadow: 0 0 30px rgba(212,175,55,.3);
+    }
+
+    /* ─── Responsive ──────────────────────────────────── */
+    @media (max-width: 640px) {
+      #info-bar { padding: 7px 10px; gap: 8px; top: 8px; right: 8px; }
+      #cert-count { font-size: 0.78rem; }
+      #btn-clear { font-size: 0.7rem; padding: 4px 8px; }
+      .slots-row { gap: 10px; }
+      .slot-zone { width: 78px; height: 78px; }
+      .modal-box { padding: 28px 18px 22px; }
+    }
+    @media (max-width: 380px) {
+      .slot-zone { width: 68px; height: 68px; font-size: 1.8rem; }
+      .badge-card { width: 68px; height: 68px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ Cover Screen ══════════════════════════════════════ -->
+<div id="cover-screen">
+  <img src="cover.png" alt="墨書傳奇封面" draggable="false">
+</div>
+
+<!-- ══ Info Bar ══════════════════════════════════════════ -->
+<div id="info-bar">
+  <span id="cert-count">持有 <span class="count-num">0</span> / 3</span>
+  <button id="btn-clear" onclick="clearProgress()">🔄 清除進度</button>
+</div>
+
+<!-- ══ Map ═══════════════════════════════════════════════ -->
+<div id="map-container">
+  <img src="map-bg.png" id="map-img" alt="大冒險地圖" draggable="false">
+
+  <!--
+    Hot zone positions (% of 1672×941 image):
+    Adjust top/left/width/height if labels appear offset.
+    朝代配對 badge:  ~x 115–315, y 350–415
+    成語填字 badge:  ~x 1095–1300, y 315–385
+    打怪 RPG badge:  ~x 105–305, y 595–665
+    中央大門 label:  ~x 575–1050, y 475–600
+  -->
+
+  <!-- Zone: 朝代配對 -->
+  <div class="hot-zone" id="zone-dynasty" onclick="goToGame('dynasty')"
+       style="top:34%;left:5%;width:23%;height:18%">
+    <div class="done-stamp" id="stamp-dynasty">✓</div>
+  </div>
+
+  <!-- Zone: 成語填字 -->
+  <div class="hot-zone" id="zone-idiom" onclick="goToGame('idiom')"
+       style="top:29%;left:64%;width:20%;height:17%">
+    <div class="done-stamp" id="stamp-idiom">✓</div>
+  </div>
+
+  <!-- Zone: 打怪 RPG -->
+  <div class="hot-zone" id="zone-warrior" onclick="goToGame('warrior')"
+       style="top:59%;left:4%;width:22%;height:18%">
+    <div class="done-stamp" id="stamp-warrior">✓</div>
+  </div>
+
+  <!-- Zone: 中央大門 -->
+  <div class="hot-zone" id="zone-gate" onclick="openGateModal()"
+       style="top:46%;left:32%;width:28%;height:22%">
+  </div>
+</div>
+
+<!-- ══ Gate Modal ════════════════════════════════════════ -->
+<div id="gate-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title">🔒 通關大門</div>
+    <div class="modal-hint">將背包中的憑證拖曳到對應的凹槽</div>
+
+    <div class="slots-row">
+      <div class="slot-wrapper">
+        <div class="slot-label">朝代</div>
+        <div class="slot-zone" id="slot-dynasty" data-slot="dynasty"></div>
+      </div>
+      <div class="slot-wrapper">
+        <div class="slot-label">成語</div>
+        <div class="slot-zone" id="slot-idiom" data-slot="idiom"></div>
+      </div>
+      <div class="slot-wrapper">
+        <div class="slot-label">勇者</div>
+        <div class="slot-zone" id="slot-warrior" data-slot="warrior"></div>
+      </div>
+    </div>
+
+    <div class="backpack-label">🎒 背包</div>
+    <div id="backpack"></div>
+
+    <button class="btn-close-modal" onclick="closeGateModal()">✕ 關閉</button>
+  </div>
+</div>
+
+<!-- ══ Win Screen ════════════════════════════════════════ -->
+<div id="win-screen">
+  <div class="win-inner">
+    <span class="win-trophy">🏆</span>
+    <div class="win-title">冒險完成！</div>
+    <div class="win-stats">
+      <div class="win-time-label">總冒險時長</div>
+      <div id="win-time">-- 分 -- 秒</div>
+    </div>
+    <button class="btn-restart" onclick="resetAdventure()">🔄 再次冒險</button>
+  </div>
+</div>
+
+<script>
+/* ══ Cover Screen ══════════════════════════════════════ */
+function initCoverScreen() {
+  const cover = document.getElementById('cover-screen');
+  if (sessionStorage.getItem('cover_seen')) {
+    cover.classList.add('hidden');
+    return;
+  }
+  function dismiss() {
+    cover.removeEventListener('click', dismiss);
+    cover.classList.add('fade-out');
+    setTimeout(() => {
+      cover.classList.add('hidden');
+      sessionStorage.setItem('cover_seen', '1');
+    }, 800);
+  }
+  cover.addEventListener('click', dismiss);
+}
+
+/* ══ Game Data ═════════════════════════════════════════ */
+const BADGES = {
+  dynasty: { key: 'cert_dynasty',  label: '朝代之印', emoji: '🏯' },
+  idiom:   { key: 'cert_idiom',    label: '成語之印', emoji: '📜' },
+  warrior: { key: 'cert_warrior',  label: '勇者之印', emoji: '⚔️' },
+};
+
+const GAME_URLS = {
+  dynasty: '../示範1_朝代配對/index.html',
+  idiom:   '../示範2_成語填字/index.html',
+  warrior: '../示範3_打怪RPG/index.html',
+};
+
+/* ══ State ═════════════════════════════════════════════ */
+let slotsFilled = { dynasty: false, idiom: false, warrior: false };
+let dragging = null;
+
+/* ══ Storage Helpers ═══════════════════════════════════ */
+function hasCert(id) { return !!localStorage.getItem(BADGES[id].key); }
+function countCerts() { return Object.keys(BADGES).filter(hasCert).length; }
+
+/* ══ Update Map UI ═════════════════════════════════════ */
+function updateMap() {
+  Object.keys(BADGES).forEach(id => {
+    const stamp = document.getElementById('stamp-' + id);
+    if (stamp) stamp.classList.toggle('show', hasCert(id));
+  });
+  document.querySelector('#cert-count .count-num').textContent = countCerts();
+}
+
+/* ══ Navigation ════════════════════════════════════════ */
+function goToGame(id) { window.location.href = GAME_URLS[id]; }
+
+/* ══ Clear Progress ════════════════════════════════════ */
+function clearProgress() {
+  if (!confirm('確定要清除所有進度嗎？')) return;
+  ['cert_dynasty','cert_idiom','cert_warrior','adventure_start'].forEach(k => localStorage.removeItem(k));
+  sessionStorage.removeItem('cover_seen');
+  slotsFilled = { dynasty: false, idiom: false, warrior: false };
+  updateMap();
+}
+
+/* ══ Gate Modal ════════════════════════════════════════ */
+function openGateModal() {
+  slotsFilled = { dynasty: false, idiom: false, warrior: false };
+  renderModalSlots();
+  renderBackpack();
+  document.getElementById('gate-modal').classList.add('open');
+}
+
+function closeGateModal() {
+  document.getElementById('gate-modal').classList.remove('open');
+  if (dragging) {
+    if (dragging.ghost) dragging.ghost.remove();
+    if (dragging.el) dragging.el.classList.remove('dragging');
+    dragging = null;
+  }
+}
+
+function renderModalSlots() {
+  Object.keys(BADGES).forEach(id => {
+    const slot = document.getElementById('slot-' + id);
+    slot.innerHTML = '';
+    slot.classList.remove('filled', 'drag-over');
+    if (slotsFilled[id]) {
+      const b = BADGES[id];
+      slot.classList.add('filled');
+      slot.innerHTML = `<div class="slot-badge"><div class="slot-badge-emoji">${b.emoji}</div><div class="slot-badge-label">${b.label}</div></div>`;
+    }
+    slot.addEventListener('dragover', onSlotDragOver);
+    slot.addEventListener('dragleave', onSlotDragLeave);
+    slot.addEventListener('drop', onSlotDrop);
+  });
+}
+
+function renderBackpack() {
+  const bp = document.getElementById('backpack');
+  bp.innerHTML = '';
+  const available = Object.keys(BADGES).filter(id => hasCert(id) && !slotsFilled[id]);
+  if (available.length === 0) {
+    bp.innerHTML = '<div class="backpack-empty">背包是空的</div>';
+    return;
+  }
+  available.forEach(id => {
+    const b = BADGES[id];
+    const card = document.createElement('div');
+    card.className = 'badge-card';
+    card.id = 'badge-' + id;
+    card.dataset.badgeId = id;
+    card.draggable = true;
+    card.innerHTML = `<div class="badge-emoji">${b.emoji}</div><div class="badge-label">${b.label}</div>`;
+
+    card.addEventListener('dragstart', e => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+
+    card.addEventListener('touchstart', onBadgeTouchStart, { passive: false });
+    card.addEventListener('touchmove',  onBadgeTouchMove,  { passive: false });
+    card.addEventListener('touchend',   onBadgeTouchEnd,   { passive: false });
+
+    bp.appendChild(card);
+  });
+}
+
+/* ── Desktop DnD ───────────────────────────────────────── */
+function onSlotDragOver(e) { e.preventDefault(); this.classList.add('drag-over'); }
+function onSlotDragLeave() { this.classList.remove('drag-over'); }
+function onSlotDrop(e) {
+  e.preventDefault();
+  this.classList.remove('drag-over');
+  tryPlaceBadge(e.dataTransfer.getData('text/plain'), this.dataset.slot);
+}
+
+/* ── Touch DnD ─────────────────────────────────────────── */
+function onBadgeTouchStart(e) {
+  if (e.touches.length > 1) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const card = e.currentTarget;
+  const id = card.dataset.badgeId;
+  const rect = card.getBoundingClientRect();
+
+  const ghost = card.cloneNode(true);
+  ghost.removeAttribute('id');
+  ghost.className = 'badge-card';
+  ghost.style.cssText =
+    'position:fixed;pointer-events:none;z-index:9999;' +
+    'opacity:.9;transform:scale(1.1) translateY(-4px);transition:none;' +
+    'box-shadow:0 10px 32px rgba(0,0,0,.8);' +
+    'width:' + rect.width + 'px;height:' + rect.height + 'px;' +
+    'left:' + (touch.clientX - rect.width / 2) + 'px;' +
+    'top:'  + (touch.clientY - rect.height / 2) + 'px;';
+  document.body.appendChild(ghost);
+
+  card.classList.add('dragging');
+  dragging = { id, el: card, ghost };
+}
+
+function onBadgeTouchMove(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  const g = dragging.ghost;
+  const w = g.offsetWidth, h = g.offsetHeight;
+  g.style.left = (touch.clientX - w / 2) + 'px';
+  g.style.top  = (touch.clientY - h / 2) + 'px';
+
+  document.querySelectorAll('.slot-zone').forEach(s => s.classList.remove('drag-over'));
+  const below = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (below) {
+    const slot = below.closest('.slot-zone');
+    if (slot) slot.classList.add('drag-over');
+  }
+}
+
+function onBadgeTouchEnd(e) {
+  if (!dragging) return;
+  const touch = e.changedTouches[0];
+  dragging.ghost.remove();
+  dragging.el.classList.remove('dragging');
+  document.querySelectorAll('.slot-zone').forEach(s => s.classList.remove('drag-over'));
+
+  const below = document.elementFromPoint(touch.clientX, touch.clientY);
+  const slot = below && below.closest('.slot-zone');
+  const badgeId = dragging.id;
+  dragging = null;
+
+  if (slot) tryPlaceBadge(badgeId, slot.dataset.slot);
+}
+
+/* ── Place Badge ────────────────────────────────────────── */
+function tryPlaceBadge(badgeId, slotId) {
+  if (!badgeId || !slotId || slotsFilled[slotId]) return;
+
+  if (badgeId === slotId) {
+    slotsFilled[slotId] = true;
+    const slot = document.getElementById('slot-' + slotId);
+    slot.classList.remove('drag-over');
+    slot.classList.add('filled');
+    const b = BADGES[slotId];
+    slot.innerHTML = `<div class="slot-badge"><div class="slot-badge-emoji">${b.emoji}</div><div class="slot-badge-label">${b.label}</div></div>`;
+    renderBackpack();
+    checkAllSlotsFilled();
+  } else {
+    const badgeEl = document.getElementById('badge-' + badgeId);
+    if (badgeEl) {
+      badgeEl.classList.remove('wrong');
+      void badgeEl.offsetWidth;
+      badgeEl.classList.add('wrong');
+      setTimeout(() => badgeEl.classList.remove('wrong'), 360);
+    }
+    const slot = document.getElementById('slot-' + slotId);
+    if (slot) slot.classList.remove('drag-over');
+  }
+}
+
+function checkAllSlotsFilled() {
+  if (Object.values(slotsFilled).every(Boolean)) {
+    setTimeout(() => { closeGateModal(); showWinScreen(); }, 600);
+  }
+}
+
+/* ══ Win Screen ════════════════════════════════════════ */
+function showWinScreen() {
+  const startStr = localStorage.getItem('adventure_start');
+  if (startStr) {
+    const elapsed = Math.floor((Date.now() - parseInt(startStr)) / 1000);
+    const mm = Math.floor(elapsed / 60).toString().padStart(2, '0');
+    const ss = (elapsed % 60).toString().padStart(2, '0');
+    document.getElementById('win-time').textContent = mm + ' 分 ' + ss + ' 秒';
+  } else {
+    document.getElementById('win-time').textContent = '-- 分 -- 秒';
+  }
+  document.getElementById('win-screen').classList.add('show');
+}
+
+/* ══ Reset Adventure ═══════════════════════════════════ */
+function resetAdventure() {
+  ['cert_dynasty','cert_idiom','cert_warrior','adventure_start'].forEach(k => localStorage.removeItem(k));
+  sessionStorage.removeItem('cover_seen');
+  document.getElementById('win-screen').classList.remove('show');
+  slotsFilled = { dynasty: false, idiom: false, warrior: false };
+  updateMap();
+}
+
+/* ══ Init ══════════════════════════════════════════════ */
+window.addEventListener('load', function() {
+  initCoverScreen();
+  if (!localStorage.getItem('adventure_start')) {
+    localStorage.setItem('adventure_start', Date.now());
+  }
+  updateMap();
+});
+</script>
+</body>
+</html>

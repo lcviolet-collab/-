@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>打怪 RPG 進階版</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+
+  :root {
+    --bg: #0d0d1a;
+    --panel: #1a1a2e;
+    --panel2: #16213e;
+    --accent: #e94560;
+    --gold: #ffd700;
+    --green: #4caf50;
+    --blue: #2196f3;
+    --purple: #9c27b0;
+    --text: #e0e0ff;
+    --border: #2a2a4a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+  }
+
+  /* ── Loading ── */
+  #loading-screen {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 1000;
+    gap: 20px;
+  }
+  #loading-screen h1 { font-size: 2.5rem; color: var(--accent); text-shadow: 0 0 20px var(--accent); }
+  .spinner {
+    width: 60px; height: 60px;
+    border: 6px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Title Screen ── */
+  #title-screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: 24px;
+    text-align: center;
+    padding: 20px;
+  }
+  #title-screen h1 {
+    font-size: 3rem; font-weight: 900;
+    color: var(--accent);
+    text-shadow: 0 0 30px var(--accent), 0 0 60px var(--accent);
+    animation: pulse-title 2s ease-in-out infinite;
+  }
+  @keyframes pulse-title {
+    0%,100% { text-shadow: 0 0 20px var(--accent); }
+    50% { text-shadow: 0 0 40px var(--accent), 0 0 80px #ff8080; }
+  }
+  #title-screen p { font-size: 1.1rem; color: #8888aa; max-width: 480px; line-height: 1.8; }
+  .enemies-preview { font-size: 2rem; letter-spacing: 8px; }
+
+  /* ── Battle Screen ── */
+  #battle-screen { display: none; width: 100%; max-width: 700px; padding: 12px; }
+
+  /* Top bar */
+  .top-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 10px 18px; margin-bottom: 12px;
+  }
+  .stage-label { font-size: 0.9rem; color: #8888aa; }
+  .stage-label strong { color: var(--text); font-size: 1rem; }
+  .coin-counter {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 1.2rem; font-weight: 700; color: var(--gold);
+    transition: transform 0.2s;
+  }
+  .coin-counter.pop { animation: coin-pop 0.3s ease; }
+  @keyframes coin-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+    100% { transform: scale(1); }
+  }
+
+  /* HP bars */
+  .hp-row {
+    display: flex; gap: 12px; margin-bottom: 12px;
+  }
+  .hp-card {
+    flex: 1; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 16px;
+  }
+  .hp-card .name { font-size: 0.85rem; color: #8888aa; margin-bottom: 4px; }
+  .hp-card .entity { font-size: 1.6rem; text-align: center; margin-bottom: 6px; }
+  .hp-bar-bg {
+    background: #333355; border-radius: 8px; height: 14px; overflow: hidden;
+  }
+  .hp-bar-fill {
+    height: 100%; border-radius: 8px;
+    background: var(--green);
+    transition: width 0.4s ease, background 0.4s ease;
+  }
+  .hp-bar-fill.yellow { background: #ffb300; }
+  .hp-bar-fill.red { background: #f44336; animation: flash-red 0.5s ease infinite alternate; }
+  @keyframes flash-red { from { opacity: 1; } to { opacity: 0.4; } }
+  .hp-num { font-size: 0.8rem; color: #8888aa; text-align: right; margin-top: 2px; }
+
+  /* Battle arena */
+  .arena {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 20px;
+    margin-bottom: 12px; text-align: center; position: relative;
+    min-height: 260px;
+  }
+  .monster-display { font-size: 5rem; margin-bottom: 4px; display: inline-block; }
+  .monster-display.shake { animation: shake 0.3s ease; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-8px); }
+    80% { transform: translateX(8px); }
+  }
+  .monster-display.hurt { animation: hurt-anim 0.3s ease; }
+  @keyframes hurt-anim {
+    0% { transform: scale(1); filter: none; }
+    50% { transform: scale(1.2); filter: brightness(3) saturate(0); }
+    100% { transform: scale(1); filter: none; }
+  }
+
+  .question-bubble {
+    background: var(--panel2); border: 2px solid var(--blue);
+    border-radius: 14px; padding: 14px 18px; margin: 10px 0;
+    font-size: 1.05rem; font-weight: 700; line-height: 1.7;
+    position: relative;
+  }
+  .question-bubble::before {
+    content: '❓'; position: absolute; top: -14px; left: 50%;
+    transform: translateX(-50%); background: var(--bg);
+    padding: 0 6px; font-size: 1.2rem;
+  }
+
+  /* Feedback overlay */
+  .feedback-overlay {
+    position: absolute; inset: 0; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5rem; font-weight: 900; letter-spacing: 2px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.1s;
+  }
+  .feedback-overlay.correct { background: rgba(76,175,80,0.25); color: #81c784; }
+  .feedback-overlay.wrong { background: rgba(244,67,54,0.25); color: #e57373; }
+  .feedback-overlay.critical { background: rgba(233,69,96,0.3); color: #ff4444; }
+  .feedback-overlay.show { opacity: 1; }
+
+  /* Options */
+  .options-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 12px;
+  }
+  .opt-btn {
+    background: var(--panel); border: 2px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 12px 10px;
+    font-size: 0.95rem; cursor: pointer; text-align: left;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+    line-height: 1.5; font-family: inherit;
+  }
+  .opt-btn:hover:not(:disabled) { background: #2a2a4a; border-color: var(--blue); transform: translateY(-2px); }
+  .opt-btn:disabled { cursor: default; }
+  .opt-btn.correct-ans { background: #1b3a1b; border-color: var(--green); }
+  .opt-btn.wrong-ans { background: #3a1b1b; border-color: var(--accent); }
+
+  /* Bag bar */
+  .bag-bar {
+    display: flex; justify-content: center; gap: 12px;
+    margin-bottom: 8px;
+  }
+  .bag-btn {
+    background: var(--panel); border: 2px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 20px;
+    font-size: 0.9rem; cursor: pointer; font-family: inherit;
+    transition: border-color 0.15s;
+  }
+  .bag-btn:hover { border-color: var(--gold); }
+
+  /* Bag popup */
+  .bag-popup {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center;
+    z-index: 500;
+  }
+  .bag-popup.open { display: flex; }
+  .bag-inner {
+    background: var(--panel); border: 2px solid var(--border);
+    border-radius: 16px; padding: 24px; min-width: 280px; max-width: 380px;
+    width: 90%;
+  }
+  .bag-inner h3 { text-align: center; margin-bottom: 16px; font-size: 1.2rem; }
+  .bag-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 8px;
+  }
+  .bag-item .item-info { font-size: 0.9rem; }
+  .use-item-btn {
+    background: var(--green); color: #fff; border: none;
+    border-radius: 6px; padding: 5px 12px; cursor: pointer;
+    font-family: inherit; font-size: 0.85rem;
+  }
+  .use-item-btn:disabled { background: #555; cursor: default; }
+  .bag-close {
+    width: 100%; background: var(--panel2); color: var(--text);
+    border: 2px solid var(--border); border-radius: 8px;
+    padding: 8px; cursor: pointer; font-family: inherit;
+    margin-top: 8px;
+  }
+
+  /* Shop */
+  #shop-screen {
+    display: none; width: 100%; max-width: 700px; padding: 12px;
+    text-align: center;
+  }
+  #shop-screen h2 {
+    font-size: 1.8rem; margin-bottom: 6px; color: var(--gold);
+    text-shadow: 0 0 12px var(--gold);
+  }
+  #shop-screen p { color: #8888aa; margin-bottom: 18px; font-size: 0.95rem; }
+  .shop-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+  .shop-card {
+    background: var(--panel);
+    border: 2px solid var(--border);
+    border-radius: 14px; padding: 18px 10px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+    position: relative;
+  }
+  .shop-card:hover:not(.disabled) { border-color: var(--gold); transform: translateY(-4px); }
+  .shop-card.disabled { opacity: 0.45; cursor: default; }
+  .shop-card .icon { font-size: 2.4rem; margin-bottom: 8px; }
+  .shop-card .item-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; }
+  .shop-card .item-desc { font-size: 0.78rem; color: #8888aa; margin-bottom: 8px; line-height: 1.4; }
+  .shop-card .price { font-size: 1rem; font-weight: 700; color: var(--gold); }
+  .shop-card .owned-badge {
+    position: absolute; top: 6px; right: 8px;
+    background: var(--green); color: #fff;
+    font-size: 0.7rem; border-radius: 6px; padding: 2px 6px;
+  }
+  .shop-coins {
+    font-size: 1.1rem; color: var(--gold); margin-bottom: 14px;
+  }
+  .shop-next-btn {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 12px; padding: 14px 40px;
+    font-size: 1.1rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    box-shadow: 0 0 20px rgba(233,69,96,0.4);
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .shop-next-btn:hover { transform: scale(1.04); box-shadow: 0 0 30px rgba(233,69,96,0.6); }
+
+  /* End screens */
+  #win-screen, #gameover-screen {
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center;
+    min-height: 100vh; gap: 20px; text-align: center;
+    padding: 24px;
+  }
+  #win-screen { background: radial-gradient(circle at center, #1a1a3e, #0d0d1a); }
+  #gameover-screen { background: radial-gradient(circle at center, #2a0000, #0d0d1a); }
+  #win-screen h1 { font-size: 3rem; color: var(--gold); text-shadow: 0 0 30px var(--gold); }
+  #gameover-screen h1 { font-size: 3rem; color: var(--accent); text-shadow: 0 0 30px var(--accent); }
+  .stat-box {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 14px; padding: 18px 30px; font-size: 1rem; line-height: 2.2;
+  }
+  .stat-box .stat-val { color: var(--gold); font-weight: 700; font-size: 1.2rem; }
+  .restart-btn {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 12px; padding: 14px 40px; font-size: 1.1rem;
+    font-weight: 700; cursor: pointer; font-family: inherit;
+    box-shadow: 0 0 20px rgba(233,69,96,0.4);
+  }
+  .restart-btn:hover { transform: scale(1.04); }
+
+  /* Buttons */
+  .big-btn {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 12px; padding: 14px 40px;
+    font-size: 1.1rem; font-weight: 700; cursor: pointer; font-family: inherit;
+    box-shadow: 0 0 20px rgba(233,69,96,0.4);
+    transition: transform 0.1s;
+  }
+  .big-btn:hover { transform: scale(1.04); }
+
+  /* Stage cleared banner */
+  .stage-clear-msg {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    background: var(--panel); border: 3px solid var(--gold);
+    border-radius: 20px; padding: 30px 50px; text-align: center;
+    z-index: 600; display: none;
+    animation: pop-in 0.3s ease;
+  }
+  .stage-clear-msg.show { display: block; }
+  @keyframes pop-in {
+    from { transform: translate(-50%,-50%) scale(0.5); opacity:0; }
+    to { transform: translate(-50%,-50%) scale(1); opacity:1; }
+  }
+  .stage-clear-msg h2 { font-size: 2rem; color: var(--gold); margin-bottom: 8px; }
+  .stage-clear-msg p { font-size: 1.1rem; color: #aaffaa; }
+
+  .correct-ans-label {
+    font-size: 0.8rem; color: #aaaaff; margin-top: 6px;
+    min-height: 20px;
+  }
+
+  /* Pixel stars bg */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.15) 0%, transparent 100%),
+      radial-gradient(1px 1px at 80% 10%, rgba(255,255,255,0.1) 0%, transparent 100%),
+      radial-gradient(1px 1px at 60% 80%, rgba(255,255,255,0.12) 0%, transparent 100%),
+      radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.08) 0%, transparent 100%),
+      radial-gradient(1px 1px at 90% 50%, rgba(255,255,255,0.1) 0%, transparent 100%);
+    pointer-events: none; z-index: -1;
+  }
+
+  /* Battle flash */
+  #battle-screen.flash-green { animation: flash-g 0.2s ease; }
+  #battle-screen.flash-red-shake { animation: flash-r 0.3s ease; }
+  @keyframes flash-g {
+    0%,100% { filter: none; }
+    50% { filter: brightness(1.5) saturate(1.5) hue-rotate(90deg); }
+  }
+  @keyframes flash-r {
+    0%,100% { filter: none; transform: none; }
+    25% { filter: brightness(1.3) saturate(2); transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+
+  /* Back button */
+  #btn-back-map {
+    position: fixed;
+    top: 12px; left: 12px;
+    z-index: 1001;
+    background: rgba(13,13,26,.8);
+    border: 1px solid rgba(233,69,96,.45);
+    border-radius: 8px;
+    color: #e94560;
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: .82rem;
+    padding: 7px 14px;
+    cursor: pointer;
+    letter-spacing: .05em;
+    text-decoration: none;
+    display: inline-block;
+    transition: border-color .2s, color .2s, background .2s;
+  }
+  #btn-back-map:hover {
+    border-color: #e94560;
+    background: rgba(233,69,96,.1);
+    color: #ff8080;
+  }
+
+  /* Responsive */
+  @media(max-width:500px) {
+    .shop-grid { grid-template-columns: 1fr; }
+    .options-grid { grid-template-columns: 1fr; }
+    #title-screen h1 { font-size: 2rem; }
+    .monster-display { font-size: 3.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<a id="btn-back-map" href="../大冒險地圖/index.html">← 回到大地圖</a>
+
+<!-- Loading -->
+<div id="loading-screen">
+  <h1>⚔️ 打怪 RPG</h1>
+  <div class="spinner"></div>
+  <p style="color:#8888aa">載入題庫中…</p>
+</div>
+
+<!-- Title -->
+<div id="title-screen">
+  <div style="font-size:3.5rem">⚔️</div>
+  <h1>打怪 RPG 進階版</h1>
+  <p>答對題目攻擊怪物，蒐集金幣買道具，挑戰 5 關魔王！</p>
+  <div class="enemies-preview">🐺 🦂 👹 🐲 👑</div>
+  <div style="font-size:0.9rem;color:#6666aa;line-height:1.8">
+    ✅ 答對 → 攻擊怪物 -25 HP + 💰×5<br>
+    ❌ 答錯 → 怪物攻擊你 -25 HP<br>
+    🏆 擊敗怪物 → 掉落 20-50 金幣 + 進商店
+  </div>
+  <button class="big-btn" onclick="startGame()">🗡 開始冒險</button>
+  <div id="question-count" style="font-size:0.85rem;color:#6666aa"></div>
+</div>
+
+<!-- Battle -->
+<div id="battle-screen">
+  <div class="top-bar">
+    <div class="stage-label">第 <strong id="stage-num">1</strong> 關 / 5</div>
+    <div class="coin-counter" id="coin-display">💰 <span id="coin-num">0</span></div>
+  </div>
+
+  <div class="hp-row">
+    <div class="hp-card">
+      <div class="name">🧙 探索者</div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill" id="player-bar" style="width:100%"></div></div>
+      <div class="hp-num" id="player-hp-num">100 / 100</div>
+    </div>
+    <div class="hp-card">
+      <div class="name" id="monster-name-label">🐺 野狼</div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill" id="monster-bar" style="width:100%"></div></div>
+      <div class="hp-num" id="monster-hp-num">100 / 100</div>
+    </div>
+  </div>
+
+  <div class="arena" id="arena">
+    <div class="monster-display" id="monster-emoji">🐺</div>
+    <div class="question-bubble" id="question-text">載入中…</div>
+    <div class="correct-ans-label" id="correct-ans-label"></div>
+    <div class="feedback-overlay" id="feedback-overlay"></div>
+  </div>
+
+  <div class="options-grid" id="options-grid"></div>
+
+  <div class="bag-bar">
+    <button class="bag-btn" onclick="openBag()">🎒 背包</button>
+  </div>
+</div>
+
+<!-- Shop -->
+<div id="shop-screen">
+  <h2>🏪 冒險商店</h2>
+  <p id="shop-stage-msg">第 1 關結束！購買道具準備下一關。</p>
+  <div class="shop-coins">💰 你有 <span id="shop-coin-num">0</span> 金幣</div>
+  <div class="shop-grid" id="shop-grid"></div>
+  <button class="shop-next-btn" onclick="nextStage()">⚔️ 繼續冒險</button>
+</div>
+
+<!-- Win -->
+<div id="win-screen">
+  <div style="font-size:4rem">🏆</div>
+  <h1>通關勝利！</h1>
+  <div class="stat-box">
+    <div>答對題數：<span class="stat-val" id="win-correct">0</span> 題</div>
+    <div>最終金幣：<span class="stat-val" id="win-coins">0</span> 枚</div>
+    <div>使用藥水：<span class="stat-val" id="win-potions">0</span> 瓶</div>
+  </div>
+  <button class="restart-btn" onclick="location.reload()">🔄 再玩一次</button>
+</div>
+
+<!-- Game Over -->
+<div id="gameover-screen">
+  <div style="font-size:4rem">💀</div>
+  <h1>GAME OVER</h1>
+  <p style="color:#ff8888">你被怪物打倒了…</p>
+  <div class="stat-box">
+    <div>答對題數：<span class="stat-val" id="go-correct">0</span> 題</div>
+    <div>金幣帶走：<span class="stat-val" id="go-coins">0</span> 枚</div>
+  </div>
+  <button class="restart-btn" onclick="location.reload()">🔄 再試一次</button>
+</div>
+
+<!-- Stage Clear Popup -->
+<div class="stage-clear-msg" id="stage-clear-msg">
+  <h2>⭐ 關卡通過！</h2>
+  <p id="stage-clear-drop"></p>
+</div>
+
+<!-- Bag Popup -->
+<div class="bag-popup" id="bag-popup">
+  <div class="bag-inner">
+    <h3>🎒 背包</h3>
+    <div id="bag-items-list"></div>
+    <button class="bag-close" onclick="closeBag()">關閉</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// Fallback question bank
+// ═══════════════════════════════════
+const FALLBACK_QUESTIONS = [
+  ["關於高雄市地理位置的敍述何者有誤？","縣市合併後，高雄市成為台灣面積最大、人口最多的直轄市","南海的東沙島及南沙太帄島歸旗津區管轄","台南、嘉義、台東、花蓮、屏東均是與高雄市毗鄰的縣市","由於高雄市西臨台灣海峽，擁有優越的港口地理條件，目前高雄港已是台灣海運的重要樞紐，也是國際重要貨櫃港之一"],
+  ["ㄅ.中部是「西部麓山地質區」，ㄆ.東部是「海岸山脈地質區」，ㄇ.東北部是「中央山脈西翼地質區」，ㄈ.西部沿海是「濱海帄原」。上述哪三個是高雄市的主要地質區？","ㄅㄇㄈ","ㄅㄆㄇ","ㄅㄆㄈ","ㄆㄇㄈ"],
+  ["高雄市過去是水泥的重要生產區，水泥原料的主要產地是半屏山和？","大崗山、壽山","壽山、旗後山","鳳山、大崗山","壽山、小崗山"],
+  ["高雄市的海岸，北起二仁溪口，南迄高屏溪口，海岸線總長約 63 公里。造成近年來部分海岸線不斷後退，危及沿岸居民生命財產安全的原因是？","開闢港口和河川上游興建水庫，泥沙來源減少","主要屬於沙岸，無海岸結構物阻隔，濱外沙洲、潟湖很發達","潟湖不斷陸化，陸地增加速度快","興建帄行海岸的海堤、離岸堤等等工程"],
+  ["下列關於高雄海岸地形的敍述何者有誤？","高屏地區沿岸的地盤有沈降的趨勢，故相較於嘉南帄原及其他地區，海岸變遷急遽，並明顯向西移動","左營港、高雄港是向內陸凹進的港口，未開闢前多屬潟湖地形","旗津半島由西北向東南延伸約 12 公里，是個天然的防波堤","從鳳鼻頭到高屏溪口是早期漂沙淤積成的海岸，但近年海岸線有後退現象，並在高屏溪口處有台灣西部海岸線上唯一的溺谷海岸"],
+  ["下列何者是高雄的斷層？ㄅ.半屏山斷層 ㄆ.鳳山斷層 ㄇ.旗山斷層 ㄈ.壽山斷層","ㄆㄇㄈ","ㄅㄆㄇ","ㄅㄇㄈ","ㄅㄆㄈ"],
+  ["ㄅ.緯度低，ㄆ.沿海暖流，ㄇ.冬季的焚風效應，ㄈ.東北季風被中央山脈阻隔。上述哪些是使人們認為高雄市都會區「沒有真正的冬季」的因素？","ㄅㄆㄈ","ㄅㄆㄇ","ㄅㄇㄈ","以上皆是"],
+  ["造成甲仙小林村、那瑪夏鄉民族村、六龜新開等部落幾近滅村的颱風是？","莫拉克颱風","莫拉菲颱風","鳳凰颱風","杒鵑颱風"],
+  ["高屏溪中、下游有許多砂石場的原因是？","以上皆是","山上地形坡陡流急，河川侵蝕力量大","河流搬運作用旺盛","河川進入帄原時，流速減緩，造成大量砂石堆積"],
+  ["有「高雄運河」之稱的是？","愛河","前鎮溪","後勁溪","典寶溪"],
+  ["關於高雄地區的自然環境災害敍述何者正確？","颱風對本區造成的主要災害是由強風和豪雨造成的","本區是台灣少有地震的區域，雖然有活斷層經過，但沒有發生過重大的地震災害，故未來也不用擔心","高雄沒有發生過龍捲風災害","強降雨量造成河川氾濫，但並未對市區造成災害"],
+  ["高雄市行政區各有特色，下列敍述何者正確？ ㄅ.三民區的三鳳中街是高雄市最大的南北貨批發中心 ㄆ.彌陀區南側漯底山遺址發掘出的蔦松文化層，記錄了帄埔族的生活方式 ㄇ.鹽埕區的玫瑰聖母堂是台灣天主教的發源地 ㄈ.田寮區有著名的月世界惡地景觀和大崗山溫泉","ㄅㄆㄈ","ㄅㄆㄇ","ㄆㄇㄈ","ㄅㄇㄈ"],
+  ["下列哪一區沒有發生過泥火山噴發？","美濃區","燕巢區","鳥松區","田寮區"],
+  ["「台灣正港的烏魚大港」指的是？","興達港","白砂崙漁港","南寮漁港","紅毛港"],
+  ["高雄縣市合併後，高雄市政府位在苓雅區，而高雄市議會位在？","鳳山區","前金區","苓雅區","岡山區"],
+  ["日治時代設立的臺灣第一座現代化糖廠是？","橋頭糖廠","美濃糖廠","旗山糖廠","大樹糖廠"],
+  ["明鄭時期的軍屯、民墾對高雄帄原已有諸多的土地開墾。下列有關當時拓墾的說法，何者正確？","築堤瀦水而為陂，這是主要的水利設施","當時高雄帄原的陂塘多達二十多處，如萬丹陂","規模最大的竹橋陂約在今日的左營區","以上皆非"],
+  ["民國 68 年 12 月 10 日晚上遊行群眾遭憲警包圍，後來發生激烈衝突，事後政府大舉逮捕相關人士交付軍法審判。這事件史稱為？","美麗島事件","白色恐怖事件","臺灣獨立聯盟事件","鄭南榕事件"],
+  ["下列有關古今地名的配對，何者錯誤？","小港—小港仔","美濃—瀰濃","彌陀港—微羅港","內門—羅漢門"],
+  ["蔡老師帶學生到鳳山進行戶外教學，下列蔡老師關於鳳山城的說法何者有誤？","六座城門之間有堅固的石牆","這座城有六座城門","城門上各增建城樓一座","城的四隅共築礮臺六座"],
+  ["清代臺灣有所謂「一田二主」的土地慣習，下列何者不是其構成的原因和現象？","墾戶稱大租戶，對土地具有永佃權","與實施墾照制度有關","導因於招佃式集體開墾","佃戶稱小租戶，頇繳大租給大租戶"],
+  ["高雄地區有條重要水圳是導引水力發電廠發電後的尾水來灌溉農田，請問這是？","獅仔頭圳","崇蘭圳","龍肚圳","海豐圳"],
+  ["1850 年代外國人先後來到打狗試圖開啟國際貿易，下列說法何者不正確？","英商為了在打狗建立商業據點，在今日哨船頭修築碼頭","1854 年英國船艦已來打狗探測水文，繪製海圖","1855 年美商開始在打狗進行貿易","後來美商經營不善，乃將資產售予英商"],
+  ["英法聯軍迫使清廷將臺灣開放為通商口岸，請問下列相關敘述何者錯誤？","清廷為了加強港口貿易發展，置閩海關，兼管關稅徵收和港口管理","打狗是被開放的通商口岸之一","外國人為保僑、商務與交涉，在打狗設有外國領事館","英國是首先來打狗設置副領事館的國家"],
+  ["下列哪一項地景與 1874 年（同治 13 年）的牡丹社事件有歷史關聯？","雄鎮北門礟臺","鳳山新城西門外的演武亭","旗后燈塔","西子灣戰備隧道"],
+  ["在抗日領袖中，何者與簡大獅、柯鐵虎並稱為「獅虎貓抗日三猛」？","林少貓","鄭吉生","陳魚","魏開"],
+  ["1920 年代以後，高雄的知識菁英展開一連串政治社會運動。下列何者不是此類運動的代表性人物？","張石定","黃石順","簡吉","黃賜"],
+  ["下列何區的古地名，其起源目前學界並不認為與原住民有關？","梓官","阿蓮","六龜","那瑪夏"],
+  ["下列何者最能代表日治末期高雄地區的工業？","煉鋁","製糖","燒磚瓦","水泥生產"],
+  ["高雄市哪個家族於清代出現五位文武秀才，日治時期該家族某成員提倡不燒金紙、不做牙、七月不普渡的風俗？","右昌楊家","內惟李家","苓雅寮陳家","左營薛家"],
+  ["某一部落被布農族人稱之為 Gani，日本人遂稱 Gani 社。請問該部落是在哪一行政區？","桃源區","茂林區","那瑪夏區","杉林區"],
+  ["下列有關旗山生活文化園區的說法，何者錯誤？","自日治時期創校以來，提供臺灣人子弟就學，作育良材","前身是旗山區鼓山國小","區內幾棟創建於日治時期的校舍已被指定為古蹟","近來成為音樂表演、藝文展演的場域，培養民眾參與藝文活動的地方"],
+  ["這座車站是日治時期臺灣西部最後完成的火車站，外觀造型近似皇帝之帽而有「帝冠式」之稱。請問這是哪一座火車站？","高雄車站","旗山車站","岡山車站","高雄港站"],
+  ["曾任報社副刊主編，以社會學家犀利眼光透視臺灣社會，並強調本土歷史文化的自尊。以上描述適合哪位作家？","吳錦發","曾貴海","鍾鐵民","鍾理和"],
+  ["原高雄縣文學獎於 1998 年更名為「鳳邑文學獎」。2016 年從四組獲獎作品中選出最具代表性的 1 件，該獎項為？","高雄獎","打狗文學獎","現代小說獎","鍾鐵民文學獎"],
+  ["位於愛河與高雄港交會點的哪個碼頭，延伸了愛河的整體浪漫意象？","真愛碼頭","新光碼頭","愛河碼頭","漁人碼頭"],
+  ["成為南部藝術重地的高雄市立美術館，是全台第三座公立美術館，它座落於？","內惟埤文化園區內","高雄市文化中心內","鳳山大東文化藝術中心內","岡山文化中心內"],
+  ["高雄市立中正文化中心內有「至德堂」等展演空間，是本地藝術家及學生的展覽舞台。請問它成立於？","西元 1981 年","西元 1971 年","西元 1991 年","西元 1988 年"],
+  ["於西元 1994 年成立，扮演傳承及扶植重要角色，是保存皮影藝術殿堂的皮影戲館位在？","岡山文化中心","中正文化中心","大東文化中心","鳳山國父紀念館"],
+  ["衛武營藝術文化中心建築外形宛若音波流動，如海洋中的魟魚。其建築理念是以融合地景地貌的何種學派或式樣為主軸？","荷蘭學派","帝冠式樣","新法蘭克福學派","荷蘭後現代主義學派"],
+  ["下列何者於西元 2004 年 10 月 18 日經高雄市政府公告為市定古蹟？","高雄市立歷史博物館","紅毛港文化園區","高雄市電影館","駁二藝術特區"],
+  ["下列哪處於西元 2012 年 3 月啟用，是融合生活藝術與在地文化特色的綜合性文化中心，設計意象強調自然元素，營造東方禪學之美？","大東文化藝術中心","岡山文化中心","衛武營藝術文化中心","高雄文化中心"],
+  ["以都會公園、藝術中心與特定商業區三體共構方式重新開發，以「南部兩廳院」為定位的藝文場館是？","衛武營藝術文化中心","大東文化藝術中心","高雄市文化中心","高雄海洋文化流行音樂中心"],
+  ["高雄海洋文化及流行音樂中心位於？","高雄港 11-15 號碼頭","興達港情人碼頭","西子灣區","大鵬灣"],
+  ["高雄市立歷史博物館本體興建於西元 1938 年，為仿西方古典建築屋身結合日本古典傳統皇宮大屋頂而成。屬於何種建築式樣？","帝冠式樣","哥德式樣","日本得康式","東洋歷史式"],
+  ["位於高雄市五福路上，西元 2001 年正式啟用，包含一面長達 18 公尺展示 2001 位市民臉孔的希望之牆。請問這是？","城市光廊","大東文化藝術中心","市民藝術大道","光之穹頂"],
+  ["高雄境內布農族以居住在桃源及那瑪夏居多，共有五大社群。請問是哪五大社群？","卓社、郡社、丹社、巒社及卡社","北社、中社、南社、東社及西社","樟山、桃源、勤和、興中及建山","沙阿魯阿社、卡那卡那富社、布農社及搭巴嘎饒望社"],
+  ["下列何處是海洋之都高雄城市發展史中「打狗開港」的重要啟航位置，歷經三百多年累積豐富的人文、歷史、宗教及生態景觀資源？","紅毛港","西子灣","興達港","哈瑪星燈塔"],
+  ["西元 2007～2010 年，哪個藝文團體在高雄進行全國首創的「藝術駐縣」活動，讓民眾感受藝術與生活結合的機會？","雲門舞集2","明華園天字歌仔戲團","明華園地字歌仔戲團","紙風車劇團"],
+  ["從 2010 年開始，秉持自創、自製、自辦、自售原則，積極開發南部藝文「購票」觀眾市場的是下列哪項藝文活動？","春天藝術節","雲門藝術節","兒童藝術節","歌仔戲劇節"],
+];
+
+// ═══════════════════════════════════
+// Game State
+// ═══════════════════════════════════
+const STAGES = [
+  { name: "🐺 野狼",  emoji: "🐺", hp: 100 },
+  { name: "🦂 毒蠍",  emoji: "🦂", hp: 100 },
+  { name: "👹 惡鬼",  emoji: "👹", hp: 100 },
+  { name: "🐲 巨龍",  emoji: "🐲", hp: 100 },
+  { name: "👑 魔王",  emoji: "👑", hp: 100 },
+];
+
+const SHOP_ITEMS = [
+  { id: "potion",   icon: "🧪", name: "紅藥水",   desc: "補 50 HP（戰鬥中也能用）", price: 30, stackable: true },
+  { id: "crystal",  icon: "💎", name: "攻擊水晶", desc: "下一題答對暴擊：怪物 -50 HP", price: 40, stackable: true },
+  { id: "revive",   icon: "🛡", name: "救命符",   desc: "HP 歸零自動復活，剩 1 HP",   price: 80, stackable: true },
+];
+
+let questions = [];
+let state = {};
+
+function initState() {
+  state = {
+    stage: 0,
+    playerHP: 100,
+    monsterHP: 100,
+    coins: 0,
+    correctCount: 0,
+    potionsUsed: 0,
+    bag: { potion: 0, crystal: 0, revive: 0 },
+    hasCritical: false,
+    usedQuestions: [],
+    answering: false,
+    justDied: false,
+  };
+}
+
+// ═══════════════════════════════════
+// CSV Fetch
+// ═══════════════════════════════════
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRoeF_yLdp2FiBsbRxFHNHnYrQEcho33wE_ogoAMZyOf8IrJ-kmvz1ApDou9b75_Z0UKG7rZrFtKINt/pub?output=csv";
+
+async function loadQuestions() {
+  try {
+    const res = await fetch(CSV_URL, { cache: "no-cache" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const q = [];
+    for (let i = 1; i < rows.length; i++) {
+      const [qText, a, b, c, d] = rows[i];
+      if (!qText || !a) continue;
+      const cleanQ = qText.replace(/[？?]\d+$/, match => match[0]).replace(/\d+$/, '').trim();
+      const opts = [a];
+      if (b && b !== "空") opts.push(b);
+      if (c && c !== "空") opts.push(c);
+      if (d && d !== "空") opts.push(d);
+      q.push([cleanQ, a, ...opts.slice(1)]);
+    }
+    if (q.length < 3) throw new Error("Too few questions");
+    questions = q;
+  } catch (e) {
+    console.warn("CSV load failed, using fallback:", e);
+    questions = FALLBACK_QUESTIONS;
+  }
+  document.getElementById("question-count").textContent = `📚 已載入 ${questions.length} 題`;
+}
+
+function parseCSV(text) {
+  const rows = [];
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const cols = [];
+    let cur = ""; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ""; }
+      else { cur += ch; }
+    }
+    cols.push(cur.trim());
+    rows.push(cols);
+  }
+  return rows;
+}
+
+// ═══════════════════════════════════
+// Init
+// ═══════════════════════════════════
+window.onload = async () => {
+  await loadQuestions();
+  document.getElementById("loading-screen").style.display = "none";
+  showScreen("title-screen");
+};
+
+function showScreen(id) {
+  ["loading-screen","title-screen","battle-screen","shop-screen","win-screen","gameover-screen"]
+    .forEach(s => {
+      const el = document.getElementById(s);
+      el.style.display = s === id ? (s === "title-screen" || s === "win-screen" || s === "gameover-screen" ? "flex" : "block") : "none";
+    });
+}
+
+// ═══════════════════════════════════
+// Game Start
+// ═══════════════════════════════════
+function startGame() {
+  initState();
+  enterStage(0);
+}
+
+function enterStage(stageIdx) {
+  state.stage = stageIdx;
+  state.monsterHP = STAGES[stageIdx].hp;
+  state.answering = false;
+  state.justDied = false;
+  updateUI();
+  showScreen("battle-screen");
+  loadQuestion();
+}
+
+// ═══════════════════════════════════
+// Question
+// ═══════════════════════════════════
+function pickQuestion() {
+  const avail = questions.filter((_,i) => !state.usedQuestions.includes(i));
+  if (avail.length === 0) { state.usedQuestions = []; }
+  const pool = questions.filter((_,i) => !state.usedQuestions.includes(i));
+  const idx = questions.indexOf(pool[Math.floor(Math.random() * pool.length)]);
+  state.usedQuestions.push(idx);
+  return questions[idx];
+}
+
+function loadQuestion() {
+  state.answering = false;
+  clearFeedback();
+  const q = pickQuestion();
+  state.currentQ = q;
+  document.getElementById("question-text").textContent = q[0];
+  document.getElementById("correct-ans-label").textContent = "";
+
+  // Build shuffled options: index 1 is answer, rest are wrong
+  const answer = q[1];
+  const wrongs = q.slice(2);
+  let opts = [answer, ...wrongs];
+  // Shuffle
+  for (let i = opts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [opts[i], opts[j]] = [opts[j], opts[i]];
+  }
+  state.shuffledOpts = opts;
+  state.correctOpt = answer;
+
+  const grid = document.getElementById("options-grid");
+  grid.innerHTML = "";
+  const labels = ["Ａ", "Ｂ", "Ｃ", "Ｄ"];
+  opts.forEach((opt, i) => {
+    const btn = document.createElement("button");
+    btn.className = "opt-btn";
+    btn.textContent = labels[i] + "  " + opt;
+    btn.onclick = () => answer_question(i);
+    grid.appendChild(btn);
+  });
+  updateUI();
+}
+
+// ═══════════════════════════════════
+// Answer
+// ═══════════════════════════════════
+function answer_question(idx) {
+  if (state.answering) return;
+  state.answering = true;
+
+  const selected = state.shuffledOpts[idx];
+  const correct = selected === state.correctOpt;
+  const btns = document.querySelectorAll(".opt-btn");
+
+  btns.forEach((b, i) => {
+    b.disabled = true;
+    if (state.shuffledOpts[i] === state.correctOpt) b.classList.add("correct-ans");
+    if (i === idx && !correct) b.classList.add("wrong-ans");
+  });
+
+  if (correct) {
+    state.correctCount++;
+    addCoins(5);
+    let dmg = 25;
+    let isCrit = false;
+    if (state.hasCritical) {
+      dmg = 50;
+      isCrit = true;
+      state.hasCritical = false;
+      state.bag.crystal = Math.max(0, state.bag.crystal - 1);
+    }
+    state.monsterHP = Math.max(0, state.monsterHP - dmg);
+    showFeedback(isCrit ? "critical" : "correct", isCrit ? "💥 CRITICAL!" : "✅ 答對！");
+    flashScreen("flash-green");
+    animateMonster("hurt");
+    updateUI();
+
+    if (state.monsterHP <= 0) {
+      setTimeout(stageCleared, 700);
+    } else {
+      setTimeout(loadQuestion, isCrit ? 1200 : 900);
+    }
+  } else {
+    state.playerHP = Math.max(0, state.playerHP - 25);
+    document.getElementById("correct-ans-label").textContent =
+      "正確答案：" + state.correctOpt;
+    showFeedback("wrong", "❌ 答錯！");
+    flashScreen("flash-red-shake");
+    updateUI();
+
+    if (state.playerHP <= 0) {
+      setTimeout(handleDeath, 800);
+    } else {
+      setTimeout(loadQuestion, 1800);
+    }
+  }
+}
+
+// ═══════════════════════════════════
+// Death & Revival
+// ═══════════════════════════════════
+function handleDeath() {
+  if (state.bag.revive > 0) {
+    state.bag.revive--;
+    state.playerHP = 1;
+    showToast("🛡 救命符發動！HP 回到 1");
+    updateUI();
+    setTimeout(loadQuestion, 1000);
+    return;
+  }
+  if (state.justDied) {
+    // Real game over
+    document.getElementById("go-correct").textContent = state.correctCount;
+    document.getElementById("go-coins").textContent = state.coins;
+    showScreen("gameover-screen");
+    return;
+  }
+  // Retry stage with HP = 1 (penalty)
+  state.justDied = true;
+  state.playerHP = 1;
+  state.monsterHP = STAGES[state.stage].hp;
+  showToast("💀 HP 歸零！重來本關，HP 剩 1！");
+  updateUI();
+  setTimeout(loadQuestion, 1200);
+}
+
+// ═══════════════════════════════════
+// Stage Clear
+// ═══════════════════════════════════
+function stageCleared() {
+  const drop = 20 + Math.floor(Math.random() * 31);
+  addCoins(drop);
+  const msg = document.getElementById("stage-clear-msg");
+  document.getElementById("stage-clear-drop").textContent =
+    `💰 掉落 ${drop} 金幣！`;
+  msg.classList.add("show");
+  setTimeout(() => {
+    msg.classList.remove("show");
+    openShop();
+  }, 1800);
+}
+
+// ═══════════════════════════════════
+// Shop
+// ═══════════════════════════════════
+function openShop() {
+  document.getElementById("shop-stage-msg").textContent =
+    `第 ${state.stage + 1} 關結束！購買道具準備下一關。`;
+  document.getElementById("shop-coin-num").textContent = state.coins;
+  renderShop();
+  showScreen("shop-screen");
+}
+
+function renderShop() {
+  const grid = document.getElementById("shop-grid");
+  grid.innerHTML = "";
+  SHOP_ITEMS.forEach(item => {
+    const canBuy = state.coins >= item.price;
+    const owned = state.bag[item.id];
+    const card = document.createElement("div");
+    card.className = "shop-card" + (canBuy ? "" : " disabled");
+    card.innerHTML = `
+      <div class="icon">${item.icon}</div>
+      <div class="item-name">${item.name}</div>
+      <div class="item-desc">${item.desc}</div>
+      <div class="price">💰 ${item.price}</div>
+      ${owned > 0 ? `<div class="owned-badge">持有 ${owned}</div>` : ""}
+    `;
+    if (canBuy) card.onclick = () => buyItem(item.id);
+    grid.appendChild(card);
+  });
+}
+
+function buyItem(id) {
+  const item = SHOP_ITEMS.find(i => i.id === id);
+  if (state.coins < item.price) return;
+  state.coins -= item.price;
+  state.bag[id]++;
+  if (id === "crystal") state.hasCritical = true;
+  document.getElementById("shop-coin-num").textContent = state.coins;
+  renderShop();
+  updateCoinUI();
+}
+
+function nextStage() {
+  if (state.stage >= 4) {
+    // Win!
+    document.getElementById("win-correct").textContent = state.correctCount;
+    document.getElementById("win-coins").textContent = state.coins;
+    document.getElementById("win-potions").textContent = state.potionsUsed;
+    if (!localStorage.getItem('adventure_start')) localStorage.setItem('adventure_start', Date.now());
+    localStorage.setItem('cert_warrior', '1');
+    showScreen("win-screen");
+    return;
+  }
+  enterStage(state.stage + 1);
+}
+
+// ═══════════════════════════════════
+// Bag
+// ═══════════════════════════════════
+function openBag() {
+  const list = document.getElementById("bag-items-list");
+  list.innerHTML = "";
+  SHOP_ITEMS.forEach(item => {
+    const qty = state.bag[item.id];
+    const div = document.createElement("div");
+    div.className = "bag-item";
+    div.innerHTML = `
+      <div class="item-info">${item.icon} ${item.name} × ${qty}</div>
+    `;
+    if (item.id === "potion" && qty > 0) {
+      const btn = document.createElement("button");
+      btn.className = "use-item-btn";
+      btn.textContent = "使用";
+      btn.onclick = () => { usePotion(); closeBag(); };
+      div.appendChild(btn);
+    }
+    list.appendChild(div);
+  });
+  document.getElementById("bag-popup").classList.add("open");
+}
+
+function closeBag() {
+  document.getElementById("bag-popup").classList.remove("open");
+}
+
+function usePotion() {
+  if (state.bag.potion <= 0) return;
+  state.bag.potion--;
+  state.potionsUsed++;
+  state.playerHP = Math.min(100, state.playerHP + 50);
+  updateUI();
+  showToast("🧪 紅藥水！補了 50 HP");
+}
+
+// ═══════════════════════════════════
+// UI Helpers
+// ═══════════════════════════════════
+function updateUI() {
+  const s = STAGES[state.stage];
+
+  document.getElementById("stage-num").textContent = state.stage + 1;
+  document.getElementById("monster-name-label").textContent = s.name;
+  document.getElementById("monster-emoji").textContent = s.emoji;
+
+  // Player HP bar
+  const pPct = Math.max(0, state.playerHP / 100);
+  const pBar = document.getElementById("player-bar");
+  pBar.style.width = (pPct * 100) + "%";
+  pBar.className = "hp-bar-fill" + (pPct < 0.2 ? " red" : pPct < 0.5 ? " yellow" : "");
+  document.getElementById("player-hp-num").textContent = `${state.playerHP} / 100`;
+
+  // Monster HP bar
+  const mPct = Math.max(0, state.monsterHP / 100);
+  const mBar = document.getElementById("monster-bar");
+  mBar.style.width = (mPct * 100) + "%";
+  mBar.className = "hp-bar-fill" + (mPct < 0.2 ? " red" : mPct < 0.5 ? " yellow" : "");
+  document.getElementById("monster-hp-num").textContent = `${state.monsterHP} / 100`;
+
+  updateCoinUI();
+}
+
+function updateCoinUI() {
+  document.getElementById("coin-num").textContent = state.coins;
+}
+
+function addCoins(n) {
+  state.coins += n;
+  updateCoinUI();
+  const el = document.getElementById("coin-display");
+  el.classList.remove("pop");
+  void el.offsetWidth;
+  el.classList.add("pop");
+}
+
+function showFeedback(type, text) {
+  const el = document.getElementById("feedback-overlay");
+  el.className = "feedback-overlay " + type + " show";
+  el.textContent = text;
+  setTimeout(() => { el.classList.remove("show"); }, type === "wrong" ? 1500 : 700);
+}
+
+function clearFeedback() {
+  const el = document.getElementById("feedback-overlay");
+  el.className = "feedback-overlay";
+  el.textContent = "";
+}
+
+function flashScreen(cls) {
+  const el = document.getElementById("battle-screen");
+  el.classList.remove("flash-green", "flash-red-shake");
+  void el.offsetWidth;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 400);
+}
+
+function animateMonster(cls) {
+  const el = document.getElementById("monster-emoji");
+  el.classList.remove("shake", "hurt");
+  void el.offsetWidth;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), 400);
+}
+
+let toastTimeout;
+function showToast(msg) {
+  let t = document.getElementById("toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "toast";
+    t.style.cssText = `
+      position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
+      background:#1a1a3e;border:1px solid #4444aa;color:#ccccff;
+      padding:10px 22px;border-radius:20px;font-size:0.95rem;
+      z-index:900;transition:opacity 0.3s;
+    `;
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = "1";
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => { t.style.opacity = "0"; }, 2000);
+}
+</script>
+</body>
+</html>

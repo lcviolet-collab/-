@@ -318,9 +318,74 @@
       color: #d4af37;
       background: rgba(0,0,0,.75);
     }
+    #level-cover {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background:
+        linear-gradient(90deg, rgba(5, 3, 0, .76), rgba(5, 3, 0, .18) 48%, rgba(5, 3, 0, .68)),
+        url("cover.png") center / cover no-repeat;
+      color: #f8e9c8;
+      cursor: pointer;
+      transition: opacity .65s ease, visibility .65s ease;
+    }
+    #level-cover.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    .cover-content {
+      width: min(620px, 92vw);
+      text-align: center;
+      text-shadow: 0 4px 18px rgba(0,0,0,.85);
+    }
+    .cover-kicker {
+      margin-bottom: 12px;
+      color: #e7c56c;
+      font-size: .95rem;
+      letter-spacing: .18em;
+    }
+    .cover-title {
+      margin: 0 0 16px;
+      font-size: clamp(2.4rem, 8vw, 5rem);
+      line-height: 1.05;
+    }
+    .cover-subtitle {
+      margin: 0 auto 28px;
+      max-width: 560px;
+      color: #f0d9a6;
+      font-size: clamp(1rem, 2.7vw, 1.25rem);
+      line-height: 1.8;
+    }
+    .cover-start {
+      min-width: 168px;
+      border: 1px solid rgba(245, 211, 124, .85);
+      border-radius: 8px;
+      background: linear-gradient(180deg, #d7ad43, #8a5d14);
+      color: #180b00;
+      font-family: 'Noto Serif TC', serif;
+      font-size: 1.05rem;
+      font-weight: 900;
+      padding: 12px 28px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.45);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
+
+<div id="level-cover" onclick="dismissLevelCover(event)" role="button" tabindex="0" aria-label="開始朝代配對">
+  <div class="cover-content">
+    <div class="cover-kicker">第一關</div>
+    <h1 class="cover-title">朝代配對</h1>
+    <p class="cover-subtitle">翻開歷史卷軸，將事件放回正確的時代。</p>
+    <button class="cover-start" type="button">開始挑戰</button>
+  </div>
+</div>
 
 <a id="btn-back-map" href="../大冒險地圖/index.html">← 回到大地圖</a>
 
@@ -356,6 +421,19 @@
 </div>
 
 <script>
+  function dismissLevelCover(event) {
+    if (event) event.stopPropagation();
+    const cover = document.getElementById('level-cover');
+    if (!cover) return;
+    cover.classList.add('is-hidden');
+    setTimeout(() => cover.remove(), 700);
+  }
+
+  document.addEventListener('keydown', (event) => {
+    const cover = document.getElementById('level-cover');
+    if (cover && (event.key === 'Enter' || event.key === ' ')) dismissLevelCover(event);
+  });
+
   /* ══ 題目資料 ══════════════════════════════════════════════ */
   const dynasties = [
     { id: 1, name: '秦' },

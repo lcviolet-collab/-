@@ -386,9 +386,74 @@
     #title-screen h1 { font-size: 2rem; }
     .monster-display { font-size: 3.5rem; }
   }
+  #level-cover {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+      linear-gradient(90deg, rgba(8, 4, 2, .78), rgba(8, 4, 2, .14) 48%, rgba(8, 4, 2, .7)),
+      url("cover.png") center / cover no-repeat;
+    color: #f5e4c8;
+    cursor: pointer;
+    transition: opacity .65s ease, visibility .65s ease;
+  }
+  #level-cover.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .cover-content {
+    width: min(660px, 92vw);
+    text-align: center;
+    text-shadow: 0 4px 18px rgba(0,0,0,.9);
+  }
+  .cover-kicker {
+    margin-bottom: 12px;
+    color: #ffb36a;
+    font-size: .95rem;
+    letter-spacing: .18em;
+  }
+  .cover-title {
+    margin: 0 0 16px;
+    font-size: clamp(2.4rem, 8vw, 5rem);
+    line-height: 1.05;
+  }
+  .cover-subtitle {
+    margin: 0 auto 28px;
+    max-width: 580px;
+    color: #f0d2aa;
+    font-size: clamp(1rem, 2.7vw, 1.25rem);
+    line-height: 1.8;
+  }
+  .cover-start {
+    min-width: 168px;
+    border: 1px solid rgba(255, 179, 106, .9);
+    border-radius: 8px;
+    background: linear-gradient(180deg, #ffb36a, #8e3c1e);
+    color: #190702;
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 900;
+    padding: 12px 28px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.48);
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
+
+<div id="level-cover" onclick="dismissLevelCover(event)" role="button" tabindex="0" aria-label="開始打怪 RPG">
+  <div class="cover-content">
+    <div class="cover-kicker">第三關</div>
+    <h1 class="cover-title">打怪 RPG</h1>
+    <p class="cover-subtitle">帶著知識與勇氣，踏入魔物盤踞的古道。</p>
+    <button class="cover-start" type="button">開始挑戰</button>
+  </div>
+</div>
 
 <a id="btn-back-map" href="../大冒險地圖/index.html">← 回到大地圖</a>
 
@@ -497,6 +562,19 @@
 </div>
 
 <script>
+function dismissLevelCover(event) {
+  if (event) event.stopPropagation();
+  const cover = document.getElementById("level-cover");
+  if (!cover) return;
+  cover.classList.add("is-hidden");
+  setTimeout(() => cover.remove(), 700);
+}
+
+document.addEventListener("keydown", (event) => {
+  const cover = document.getElementById("level-cover");
+  if (cover && (event.key === "Enter" || event.key === " ")) dismissLevelCover(event);
+});
+
 // ═══════════════════════════════════
 // Fallback question bank
 // ═══════════════════════════════════
